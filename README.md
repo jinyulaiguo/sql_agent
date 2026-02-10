@@ -50,7 +50,7 @@ day10/
 
 ### 1. 环境配置
 
-在 `day10` 目录下创建 `.env` 文件（参考 `.env.example`）：
+在项目目录下创建 `.env` 文件（参考 `.env.example`）：
 
 ```ini
 # MySQL 配置
@@ -68,8 +68,6 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 ### 2. 初始化数据与索引
 
 ```bash
-# 进入目录
-cd day10
 
 # 1. 初始化数据库 (导入 Chinook 数据集)
 uv run scripts/setup_database.py
@@ -82,14 +80,13 @@ uv run scripts/build_rag_index.py
 
 **终端 1: 启动后端 (FastAPI)**
 ```bash
-cd day10
 uv run api_server.py
 # 服务将运行在 http://localhost:8000
 ```
 
 **终端 2: 启动前端 (Vue + Vite)**
 ```bash
-cd day10/frontend
+cd frontend
 npm run dev
 # 服务将运行在 http://localhost:5173
 ```
@@ -101,7 +98,6 @@ npm run dev
 如果你不想启动前端，也可以通过命令行直接测试：
 
 ```bash
-cd day10
 uv run main.py
 ```
 
@@ -111,3 +107,12 @@ uv run main.py
 *   **安全执行**: 限制仅执行 `SELECT` 查询，防止数据被破坏。
 *   **Gemini UI**: 现代化的前端界面，支持 Markdown 表格显示，交互流畅。
 *   **智能纠错**: (开发中) Agent 能够根据报错信息尝试修正 SQL。
+
+## 📚 技术栈
+
+*   **LLM**: DeepSeek-V3 / OpenAI GPT-4
+*   **Backend**: Python, FastAPI
+*   **Vector Database**: ChromaDB (用于存储和检索表结构 Schema)
+*   **Database**: MySQL 8.0
+*   **ORM**: SQLAlchemy, Pydantic
+*   **Frontend**: Vue 3, Vite
