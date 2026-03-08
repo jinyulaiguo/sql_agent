@@ -1,0 +1,22 @@
+[
+    {
+        "question": "统计每种流派的歌曲数量，按数量从高到低排序，只看前5名",
+        "sql": "SELECT g.Name, COUNT(t.TrackId) AS TrackCount FROM Genre g JOIN Track t ON g.GenreId = t.GenreId GROUP BY g.GenreId, g.Name ORDER BY TrackCount DESC LIMIT 5",
+        "thought": "这是一个分组统计问题。需要关联 Genre 和 Track 表，按 GenreId 分组计数，最后排序并取前5。"
+    },
+    {
+        "question": "查找 'Iron Maiden' 乐队的所有专辑",
+        "sql": "SELECT al.Title FROM Album al JOIN Artist ar ON al.ArtistId = ar.ArtistId WHERE ar.Name = 'Iron Maiden'",
+        "thought": "这是一个多表关联查询。需要通过 Artist 表找到 'Iron Maiden' 的 ID，然后在 Album 表中筛选该 ArtistId 的专辑。"
+    },
+    {
+        "question": "列出购买金额最高的 3 位客户",
+        "sql": "SELECT c.FirstName, c.LastName, SUM(i.Total) AS TotalSpent FROM Customer c JOIN Invoice i ON c.CustomerId = i.CustomerId GROUP BY c.CustomerId, c.FirstName, c.LastName ORDER BY TotalSpent DESC LIMIT 3",
+        "thought": "这是一个聚合查询。需要关联 Customer 和 Invoice 表，对每个用户的 Invoice Total 求和，然后降序排列取前3。"
+    },
+    {
+        "question": "查询包含 'Rock' 且时长超过 5 分钟的歌曲",
+        "sql": "SELECT t.Name, t.Milliseconds, g.Name AS GenreName FROM Track t JOIN Genre g ON t.GenreId = g.GenreId WHERE g.Name = 'Rock' AND t.Milliseconds > 300000 LIMIT 20",
+        "thought": "这是一个带条件的关联查询。需要关联 Track 和 Genre，并在 WHERE 子句中同时过滤流派名称和歌曲时长（注意单位是毫秒）。"
+    }
+]
