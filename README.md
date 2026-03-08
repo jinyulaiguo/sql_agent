@@ -43,6 +43,8 @@ day10/
 │   └── test_*.py               # 各模块手动测试脚本
 ├── docs/                       # 文档
 │   └── optimization_list.md    # 优化修改清单
+├── .env.example                # 环境变量模板（复制为 .env 后填入真实值）
+├── .gitignore                  # Git 忽略规则
 ├── exceptions.py               # 自定义异常
 ├── api_server.py               # FastAPI 后端入口
 ├── main.py                     # 命令行交互入口
@@ -76,7 +78,13 @@ api_server.py / main.py       ← 入口层
 
 ### 1. 环境配置
 
-在项目根目录下创建 `.env` 文件：
+复制 `.env.example` 为 `.env` 并填入真实值：
+
+```bash
+cp .env.example .env
+```
+
+然后编辑 `.env`，填入你的实际配置：
 
 ```ini
 # MySQL 配置
