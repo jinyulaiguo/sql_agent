@@ -32,7 +32,7 @@ def main():
                 continue
 
             print("\n🤖 Agent 思考中...")
-            response = agent.run(user_input)
+            response, _ = agent.run(user_input)
 
             print(f"\n✅ 回答:\n{response}")
 

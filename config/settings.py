@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     # ChromaDB Configuration
     chroma_db_dir: str = "data/chromadb_store"
 
+    # Redis Configuration
+    redis_url: str = "redis://localhost:6379/0"
+    session_ttl: int = 1800  # 会话过期时间（秒），默认 30 分钟
+    max_history_rounds: int = 5  # 最大保留对话轮数
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property

@@ -11,27 +11,31 @@ from rag.retriever import retriever
 from loguru import logger
 
 
-def list_tables_tool(filter_query: str = None) -> List[str]:
+def list_tables_tool(filter_query: str = None, top_k: int = 5) -> List[str]:
     """
     列出数据库中的表名。
     如果提供了 filter_query（例如用户的提问），则使用 RAG 语义检索相关表。
+    如果不提供 filter_query，则返回数据库中的 **所有** 表名。
 
     Args:
-        filter_query: 用于 RAG 过滤的用户问题关键词
+        filter_query: 可选，用于 RAG 过滤的用户问题关键词。留空则返回所有表。
+        top_k: 可选，使用 RAG 时返回的最相关表数量，默认 5。
 
     Returns:
         List[str]: 相关表名列表
     """
     try:
         if filter_query:
-            logger.info(f"使用 RAG 检索相关表: {filter_query}")
+            logger.info(f"使用 RAG 检索相关表: '{filter_query}', top_k={top_k}")
             relevant_tables = retriever.retrieve_related_schemas(
-                filter_query, n_results=5
+                filter_query, n_results=top_k
             )
             if relevant_tables:
                 return relevant_tables
             logger.warning("RAG 未返回结果，回退到显示所有表。")
 
+        # 未提供 filter_query 或 RAG 失败时，返回全部表
+        logger.info("未提供检索词，返回数据库全部表名")
         return schema_extractor.get_all_table_names()
     except Exception as e:
         logger.error(f"list_tables_tool 错误: {e}")

@@ -19,7 +19,9 @@ class SchemaIndexer:
         os.makedirs(settings.chroma_db_dir, exist_ok=True)
 
         self.client = chromadb.PersistentClient(path=settings.chroma_db_dir)
-        self.embedding_fn = embedding_functions.DefaultEmbeddingFunction()
+        self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name="BAAI/bge-base-zh-v1.5"
+        )
         self.collection = self.client.get_or_create_collection(
             name="schema_collection",
             embedding_function=self.embedding_fn,

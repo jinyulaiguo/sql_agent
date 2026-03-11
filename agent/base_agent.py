@@ -122,25 +122,29 @@ class TextToSQLAgent:
 
         return prompt
 
-    def run(self, user_query: str) -> str:
+    def run(self, user_query: str, history: list[dict] = None) -> tuple[str, list[dict]]:
         """
         Agent 主循环：接收用户问题，通过 ReAct 循环调用工具，返回最终回答。
 
         Args:
             user_query: 用户的自然语言问题
+            history: 可选，之前的压缩会话历史（system + user/assistant 对话）
 
         Returns:
-            str: Agent 的最终回答
+            tuple[str, list[dict]]: (Agent 的最终回答, 完整的 messages 列表)
         """
-        # 每次调用使用独立的 messages 列表，避免并发冲突
-        system_prompt = self._construct_system_prompt()
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_query},
-        ]
+        # 构建 messages：有历史则追加新问题，否则新建
+        if history:
+            messages = history + [{"role": "user", "content": user_query}]
+        else:
+            system_prompt = self._construct_system_prompt()
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_query},
+            ]
         logger.info(f"用户查询: {user_query}")
 
-        max_turns = 10
+        max_turns = 100
         for turn in range(max_turns):
             try:
                 response = self.client.chat.completions.create(
@@ -188,13 +192,13 @@ class TextToSQLAgent:
                 # 情况2: LLM 给出了最终回答
                 else:
                     logger.info("Agent 完成推理。")
-                    return message.content
+                    return message.content, messages
 
             except Exception as e:
                 logger.error(f"Agent 执行错误: {e}")
-                return "抱歉，处理您的问题时发生了内部错误，请稍后重试。"
+                return "抱歉，处理您的问题时发生了内部错误，请稍后重试。", messages
 
-        return "错误: 达到最大推理轮数，未能生成最终回答。"
+        return "错误: 达到最大推理轮数，未能生成最终回答。", messages
 
 
 # 全局 Agent 实例（client 和工具定义共享，messages 每次 run 独立）

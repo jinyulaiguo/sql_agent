@@ -3,11 +3,12 @@ import { ref, nextTick } from 'vue'
 import ChatMessage from './ChatMessage.vue'
 
 const messages = ref([
-  { role: 'agent', content: '你好！我是你的 SQL 智能助手。你可以问我关于音乐数据库的任何问题，比如“统计每种流派的歌曲数量”。' }
+  { role: 'agent', content: '你好！我是你的 SQL 智能助手。你可以问我关于音乐数据库的任何问题，比如"统计每种流派的歌曲数量"。' }
 ])
 const inputMessage = ref('')
 const isLoading = ref(false)
 const chatContainer = ref(null)
+const sessionId = ref(null)
 
 const scrollToBottom = async () => {
   await nextTick()
@@ -16,23 +17,32 @@ const scrollToBottom = async () => {
   }
 }
 
+const startNewChat = () => {
+  sessionId.value = null
+  messages.value = [
+    { role: 'agent', content: '你好！新的对话已开始。请问有什么问题？' }
+  ]
+}
+
 const sendMessage = async () => {
   const content = inputMessage.value.trim()
   if (!content || isLoading.value) return
 
-  // Add user message
   messages.value.push({ role: 'user', content })
   inputMessage.value = ''
   isLoading.value = true
   scrollToBottom()
 
   try {
+    const requestBody = { message: content }
+    if (sessionId.value) {
+      requestBody.session_id = sessionId.value
+    }
+
     const response = await fetch('http://localhost:8000/api/chat', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ message: content })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
     })
 
     if (!response.ok) {
@@ -40,6 +50,7 @@ const sendMessage = async () => {
     }
 
     const data = await response.json()
+    sessionId.value = data.session_id
     messages.value.push({ role: 'agent', content: data.response })
   } catch (error) {
     messages.value.push({ role: 'error', content: `请求失败: ${error.message}` })
@@ -52,6 +63,16 @@ const sendMessage = async () => {
 
 <template>
   <div class="chat-interface">
+    <div class="chat-header">
+      <button class="new-chat-btn" @click="startNewChat" title="新对话">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        新对话
+      </button>
+    </div>
+
     <div class="chat-history" ref="chatContainer">
       <ChatMessage 
         v-for="(msg, index) in messages" 
@@ -96,6 +117,31 @@ const sendMessage = async () => {
   width: 100%;
 }
 
+.chat-header {
+  padding: 12px 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.new-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid #dadce0;
+  border-radius: 20px;
+  background: white;
+  color: var(--accent-color);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.new-chat-btn:hover {
+  background: #f0f4f9;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
 .chat-history {
   flex: 1;
   overflow-y: auto;
@@ -110,7 +156,7 @@ const sendMessage = async () => {
   background: white;
   border-radius: 18px;
   width: fit-content;
-  margin-left: 54px; /* Align with avatar */
+  margin-left: 54px;
   margin-bottom: 24px;
 }
 
@@ -132,7 +178,7 @@ const sendMessage = async () => {
 
 .input-area {
   padding: 20px;
-  background: var(--bg-color); /* Matches body bg */
+  background: var(--bg-color);
 }
 
 .input-wrapper {

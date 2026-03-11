@@ -21,3 +21,6 @@ Thumbs.db
 
 # ===== 项目特定 =====
 data/chromadb_store/
+
+# ===== 文档文件 =====
+docs/
