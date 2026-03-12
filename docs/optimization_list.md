@@ -393,8 +393,8 @@ DDL: CREATE TABLE Customer (...)
 
 #### 短期（当前迭代）—— 赋予 Agent 自主性决策
 
-- [ ] **废弃固定的 Pipeline**：不再通过 Prompt 强制限定先 RAG 再 Schema 的流程，将各种底层工具交由 LLM 自主决定何时调用
-- [ ] **增强 Tool Descriptions**：在工具的文档注释（docstring）中极度清晰地写明每种工具的使用场景、入参和能查到的数据边界，通过工具描述（而非系统提示词）来引导 LLM 的行为
+- [x] **废弃固定的 Pipeline**：不再通过 Prompt 强制限定先 RAG 再 Schema 的流程，将各种底层工具交由 LLM 自主决定何时调用
+- [x] **增强 Tool Descriptions**：在工具的文档注释（docstring）中极度清晰地写明每种工具的使用场景、入参和能查到的数据边界，通过工具描述（而非系统提示词）来引导 LLM 的行为
 - [ ] **复杂查询的动态规划**：对于复杂的提问（多表多次分析），引导 Agent 先写出完整的分析计划，进而自主通过多轮 function calling 根据上一步结果动态调整下一步动作
 
 #### 中期（下个版本）—— 检索增强

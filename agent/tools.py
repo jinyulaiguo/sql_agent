@@ -13,13 +13,15 @@ from loguru import logger
 
 def list_tables_tool(filter_query: str = None, top_k: int = 5) -> List[str]:
     """
-    列出数据库中的表名。
-    如果提供了 filter_query（例如用户的提问），则使用 RAG 语义检索相关表。
-    如果不提供 filter_query，则返回数据库中的 **所有** 表名。
+    【核心侦查工具】列出数据库中的表名。
+    当你不清楚数据库里有什么表，或者需要将用户输入映射到实际的表名时，必须首先调用此工具。
+    - 传 filter_query: 根据业务问题语义进行 RAG 检索，返回最相关的几张表（适用于想要快速定位目标表）。
+    - 不传 filter_query: 返回数据库内所有的表名（适用于想看看整个业务有啥表，或是语义检索没找到时的大范围搜索）。
+    请根据你的判断决定是否要传入搜索词。
 
     Args:
-        filter_query: 可选，用于 RAG 过滤的用户问题关键词。留空则返回所有表。
-        top_k: 可选，使用 RAG 时返回的最相关表数量，默认 5。
+        filter_query: 可选。用于检索的用户问题关键词或业务术语。留空则返回所有表。
+        top_k: 可选。使用检索时返回的表名数量上限，默认为 5。
 
     Returns:
         List[str]: 相关表名列表
@@ -44,13 +46,16 @@ def list_tables_tool(filter_query: str = None, top_k: int = 5) -> List[str]:
 
 def get_schema_tool(table_names: List[str]) -> str:
     """
-    获取指定表的详细 Schema（包含 DDL 和中文注释）。
+    【防御性编程必需工具】获取指定表的详细结构信息（Schema）。
+    在你准备动手写 SQL 之前，**必须**使用此工具确认表的字段名、数据类型以及可能的外键关联。
+    如果上次执行 SQL 报了“字段不存在”的错误，你也应该再次调用此工具确认真正的字段名。
+    该工具返回的内容包含 DDL 和有价值的中文注释，是你写出正确 SQL 的关键。
 
     Args:
-        table_names: 表名列表
+        table_names: 需要确认结构的表名列表（如 ["Employee", "Customer"]）。
 
     Returns:
-        str: 所有表的文本化 Schema 信息
+        str: 包含字段、类型、注释及外键定义的文本。
     """
     schemas_text = []
     try:
@@ -65,7 +70,9 @@ def get_schema_tool(table_names: List[str]) -> str:
 
 def execute_sql_tool(sql_query: str) -> str:
     """
-    执行 SELECT SQL 查询并以 Markdown 表格形式返回结果。
+    【终极执行工具】执行你编写的 SELECT SQL 查询，并返回 Markdown 表格形式的数据结果。
+    如果返回了报错信息（如 SQL 语法错误、未知字段等），请**不要马上放弃并回复用户**。
+    你应该分析返回的错误信息，并在下一次思考中重新编写 SQL，或者使用 get_schema_tool 查阅结构后再次尝试。
     内部自动进行安全校验（sqlglot AST）和行数限制。
 
     Args:
