@@ -6,6 +6,9 @@
 
 set -e
 
+# 配置 Hugging Face 国内加速镜像源，解决网络连通性导致的各种启动卡顿
+export HF_ENDPOINT=https://hf-mirror.com
+
 # 颜色定义
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -52,8 +55,12 @@ uv run api_server.py &
 BACKEND_PID=$!
 echo -e "${GREEN}   后端 PID: ${BACKEND_PID}，端口: 8000${NC}"
 
-# 等待后端启动
-sleep 2
+# 等待后端完全启动（循环检测 8000 端口）
+echo -e "${YELLOW}⏳ 等待后端完全启动（等待内部的 RAG 模型加载）...${NC}"
+while ! curl -s http://localhost:8000/docs > /dev/null; do
+    sleep 1
+done
+echo -e "${GREEN}✅ 后端服务已就绪！${NC}"
 
 # 启动前端（后台运行）
 echo -e "${GREEN}🎨 启动前端 (Vite)...${NC}"
