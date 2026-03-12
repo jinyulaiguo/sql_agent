@@ -395,7 +395,7 @@ DDL: CREATE TABLE Customer (...)
 
 - [x] **废弃固定的 Pipeline**：不再通过 Prompt 强制限定先 RAG 再 Schema 的流程，将各种底层工具交由 LLM 自主决定何时调用
 - [x] **增强 Tool Descriptions**：在工具的文档注释（docstring）中极度清晰地写明每种工具的使用场景、入参和能查到的数据边界，通过工具描述（而非系统提示词）来引导 LLM 的行为
-- [ ] **复杂查询的动态规划**：对于复杂的提问（多表多次分析），引导 Agent 先写出完整的分析计划，进而自主通过多轮 function calling 根据上一步结果动态调整下一步动作
+- [x] **复杂查询的动态规划**：对于复杂的提问（多表多次分析），引导 Agent 先写出完整的分析计划，进而自主通过多轮 function calling 根据上一步结果动态调整下一步动作
 
 #### 中期（下个版本）—— 检索增强
 
@@ -448,3 +448,10 @@ DDL: CREATE TABLE Customer (...)
 | **架构调整** | 废弃全局唯一 `engine`，改为基于 `source_id` 的连接池缓存抽象（`dict` 或 `@lru_cache`）；新建 `data_sources` 表存储用户的连接配置（支持 PostgreSQL、SQL Server、Oracle 等） |
 | **流程适配** | 前端允许用户选择当前对话使用的数据源；Agent 注入 `db_type` 变量到 Prompt 引导方言；`sqlglot` 校验时传入对应的方言 `read=db_type` |
 | **优势** | 核心组件（SQLAlchemy Inspector 提取 Schema，sqlglot 校验跨方言 AST）天生解耦，支持无缝拓展 90% 的关系型数据库 |
+
+### 6.5 🔵 前端思维链展示（动态折叠）
+
+| 项目 | 说明 |
+|------|------|
+| **内容** | 优化 `ChatMessage.vue` 的渲染逻辑，利用正则表达式从大模型回复内容中抽取出 `<plan>` 和 `<plan_update>` 标签包裹的思维链过程。 |
+| **效果** | 对文本块进行分离渲染：正式回复内容直接渲染为普通的 Markdown 气泡；而 Agent 内部生成的分析计划和纠错思路使用 HTML `<details>` 标签转化为可折叠面板并赋予特定的高亮/灰底样式，达到内敛清爽且便于调试的用户体验。 |
