@@ -1,6 +1,6 @@
 # Text-to-SQL Agent (Gemini 风格)
 
-这是一个基于 LLM 的智能数据库查询助手（概念验证 / 教学演示项目）。它可以理解用户的中文自然语言问题，结合 RAG（检索增强生成）技术查找相关的数据库表结构，自动生成 SQL 语句并在 MySQL 数据库中执行，最后用自然语言回答用户。
+这是一个基于 LLM 的智能数据库查询助手。它可以理解用户的中文自然语言问题，结合混合检索 (Vector + BM25) 查找相关的数据库表结构，支持长上下文与多轮追问，自动生成 SQL 语句并在 MySQL 数据库中安全执行，最后用自然语言回答用户。
 
 项目前端采用了仿 Google Gemini 的扁平化设计，支持 Markdown 渲染（含表格）。
 
@@ -15,10 +15,11 @@ day10/
 ├── db/                         # 数据库访问层
 │   ├── engine.py               # 统一的 SQLAlchemy Engine 单例
 │   ├── schema_extractor.py     # 从 MySQL 提取表结构 + 中文注释
-│   └── executor.py             # SQL 安全执行 + 结果格式化
-├── rag/                        # RAG 向量检索层
-│   ├── indexer.py              # Schema 向量索引构建 (ChromaDB)
-│   └── retriever.py            # 语义相似度检索
+│   ├── executor.py             # SQL 安全执行 + 结果格式化
+│   └── session_store.py        # 基于 Redis 的多轮会话存储处理
+├── rag/                        # 混合检索层 (RAG)
+│   ├── indexer.py              # Schema 构建向量索引与 BM25 词库
+│   └── retriever.py            # BM25 + Vector 混合相似度检索及 RRF 融合
 ├── security/                   # 安全层
 │   └── sql_validator.py        # SQL AST 安全校验 (sqlglot)
 ├── models/                     # 数据模型层
@@ -48,6 +49,7 @@ day10/
 ├── exceptions.py               # 自定义异常
 ├── api_server.py               # FastAPI 后端入口
 ├── main.py                     # 命令行交互入口
+├── start.sh                    # 🚀 一键启动脚本 (包括前后端)
 └── pyproject.toml              # Python 项目依赖 (uv 管理)
 ```
 
@@ -72,7 +74,8 @@ api_server.py / main.py       ← 入口层
 1. **Python 3.10+**（推荐使用 [uv](https://docs.astral.sh/uv/) 管理依赖）
 2. **Node.js 18+**（用于前端）
 3. **MySQL 8.0 / MariaDB**（数据库服务，需已启动）
-4. **DeepSeek API Key**（或其他兼容 OpenAI SDK 的 LLM）
+4. **Redis**（用于多轮对话上下文缓存，建议开启）
+5. **DeepSeek API Key**（或其他兼容 OpenAI SDK 的 LLM）
 
 ## 🚀 快速启动
 
@@ -124,6 +127,21 @@ uv run scripts/build_rag_index.py
 
 ### 4. 启动服务
 
+**推荐运行方式：一键启动**
+
+项目根目录下提供了一个 `start.sh` 一键启动脚本，它会自动配置源、检查并释放被占用的端口、检查 Redis 状态，然后在后台同时启动 FastAPI 后端和 Vite 前端。
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+*(如果出现终端持续挂起，那是脚本在后台运行，按 `Ctrl+C` 即可一键安全停止所有的前后端服务)*
+
+---
+
+**手动分步启动（如果不用 start.sh）：**
+
 **终端 1: 启动后端 (FastAPI)**
 ```bash
 uv run api_server.py
@@ -161,9 +179,10 @@ uv run main.py
 
 ## ✨ 功能特性
 
-- **RAG 增强**：通过 ChromaDB 语义检索快速定位相关表，避免将全库 Schema 塞入 Prompt 导致 Token 溢出
-- **安全执行**：使用 sqlglot 将 SQL 解析为 AST，严格限制仅执行 `SELECT` 查询，拦截所有写操作
-- **Gemini UI**：仿 Google Gemini 的前端界面，支持 Markdown 表格渲染
+- **混合检索 (Hybrid RAG)**：结合 ChromaDB 语义向量 (`bge-base-zh-v1.5`) 与 BM25 关键词检索，双路召回并使用 RRF 算法融合，大幅提升中文场景与业务命名精确匹配的准确率
+- **多轮对话支持**：基于 Redis 会话存储管理和上下文截断压缩策略，实现长效的多轮追问及意图继承能力
+- **安全并发引擎**：重构组件连接池与 Agent 局域状态隔离，杜绝并发污染；后端使用 sqlglot 将 SQL 解析为 AST 拦截写操作，前端引入 DOMPurify 洗消防御 XSS 攻击
+- **Gemini UI 与折叠思考流**：仿 Google Astro/Gemini 界面设计，支持 Markdown 渲染。具备提取 `<plan>` 等思考过程并将其折叠的功能，界面清爽
 - **Few-shot 学习**：内置典型查询示例，提升复杂 SQL（多表 JOIN、聚合等）的生成准确率
 - **中文注释增强**：对 Chinook 数据集提供完整的中文字段描述映射，帮助 LLM 理解数据含义
 
@@ -190,13 +209,10 @@ uv run main.py
 
 ## ⚠️ 已知限制
 
-本项目为概念验证/教学演示，存在以下局限性：
+本项目存在以下局限性或待优化点：
 
-- **不支持多轮对话**：每次提问都是独立会话，无法基于上一轮结果追问
-- **不支持流式输出**：需等待 Agent 完整执行完毕后才返回结果
-- **仅支持只读查询**：出于安全考虑，仅允许 `SELECT` 操作
-- **Embedding 模型偏英文**：当前使用 `all-MiniLM-L6-v2`，中文语义匹配能力有限
-- **表规模限制**：当前架构在 20-200 张表范围内效果较好，超出后检索召回率下降
+- **不支持流式输出**：需等待 Agent 完整执行完毕后才返回结果，未来可考虑基于 SSE 构建流式推送
+- **大规模表极光召回局限**：在超大规模表场景 (>500张) 下，可能需要引入基于业务域过滤的更细颗粒度（字段级）检索
 
 > 详细的优化方案和重构建议见 [优化修改清单](docs/optimization_list.md)
 
@@ -206,9 +222,10 @@ uv run main.py
 |------|------|
 | **LLM** | DeepSeek-V3 / OpenAI GPT-4（基于 OpenAI 兼容 SDK） |
 | **Backend** | Python, FastAPI, Uvicorn |
-| **Vector Database** | ChromaDB（Schema 语义检索，Embedding: all-MiniLM-L6-v2） |
+| **Vector Database** | ChromaDB（向量检索, bge-base-zh-v1.5） + rank-bm25（关键词匹配） |
 | **Database** | MySQL 8.0（业务数据存储） |
+| **Cache Store** | Redis（会话和历史状态维持） |
 | **ORM / Parse** | SQLAlchemy（数据库访问）, Pydantic（数据校验）, sqlglot（SQL AST 安全解析） |
-| **工具库** | loguru（日志）, pandas（结果表格化） |
+| **工具库** | loguru（日志）, pandas（结果表格化）, jieba（分词） |
 | **Frontend** | Vue 3 + Vite（组合式 API） |
 | **包管理** | uv（Python）, npm（前端） |
