@@ -28,10 +28,15 @@ const sendMessage = async () => {
   const content = inputMessage.value.trim()
   if (!content || isLoading.value) return
 
+  // 1. 添加用户提问
   messages.value.push({ role: 'user', content })
   inputMessage.value = ''
   isLoading.value = true
   scrollToBottom()
+
+  // 2. 预先添加一个空的 agent 气泡，用于容纳流式输出
+  const agentMessage = { role: 'agent', content: '' }
+  messages.value.push(agentMessage)
 
   try {
     const requestBody = { message: content }
@@ -49,11 +54,63 @@ const sendMessage = async () => {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const data = await response.json()
-    sessionId.value = data.session_id
-    messages.value.push({ role: 'agent', content: data.response })
+    // 3. 开始解析 SSE 数据流
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      
+      buffer += decoder.decode(value, { stream: true })
+      
+      // 按两段换行符分割 SSE 事件
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() || '' // 保留最后一个不完整的块
+      
+      for (const part of parts) {
+        if (part.trim().startsWith('data:')) {
+          const jsonStr = part.replace(/^data:\s*/, '').trim()
+          if (!jsonStr) continue
+          
+          try {
+            const dataObj = JSON.parse(jsonStr)
+            
+            // 使用索引直接修改 messages 数组以确保触发 Vue 响应式 DOM 更新
+            const lastIdx = messages.value.length - 1
+            
+            if (dataObj.event === 'session') {
+              sessionId.value = dataObj.data
+            } else if (dataObj.event === 'content') {
+              // 追加正常回复或思维链内容到当前气泡
+              messages.value[lastIdx].content += dataObj.data
+              scrollToBottom()
+            } else if (dataObj.event === 'tool') {
+              // 工具调用的中间状态，包裹在 <thought> 标签中
+              // 这样 ChatMessage.vue 可以统一识别并放入折叠框
+              messages.value[lastIdx].content += `\n<thought>🔧 ${dataObj.data}...</thought>\n`
+              scrollToBottom()
+            } else if (dataObj.event === 'error') {
+              messages.value[lastIdx].content += `\n**[Error]** ${dataObj.data}`
+              scrollToBottom()
+            } else if (dataObj.event === 'done') {
+              // 流结束
+              break
+            }
+          } catch (e) {
+            console.error('JSON Parse error for chunk: ', jsonStr, e)
+          }
+        }
+      }
+    }
   } catch (error) {
-    messages.value.push({ role: 'error', content: `请求失败: ${error.message}` })
+    if (agentMessage.content === '') {
+       agentMessage.role = 'error'
+       agentMessage.content = `请求失败: ${error.message}`
+    } else {
+       agentMessage.content += `\n\n*(网络连接中断: ${error.message})*`
+    }
   } finally {
     isLoading.value = false
     scrollToBottom()
@@ -80,11 +137,6 @@ const sendMessage = async () => {
         :role="msg.role" 
         :content="msg.content" 
       />
-      <div v-if="isLoading" class="loading-indicator">
-        <span class="dot"></span>
-        <span class="dot"></span>
-        <span class="dot"></span>
-      </div>
     </div>
 
     <div class="input-area">
@@ -149,32 +201,6 @@ const sendMessage = async () => {
   scroll-behavior: smooth;
 }
 
-.loading-indicator {
-  display: flex;
-  gap: 8px;
-  padding: 12px 18px;
-  background: white;
-  border-radius: 18px;
-  width: fit-content;
-  margin-left: 54px;
-  margin-bottom: 24px;
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  background: #ccc;
-  border-radius: 50%;
-  animation: bounce 1.4s infinite ease-in-out both;
-}
-
-.dot:nth-child(1) { animation-delay: -0.32s; }
-.dot:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1); }
-}
 
 .input-area {
   padding: 20px;

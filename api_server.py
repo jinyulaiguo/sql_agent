@@ -6,7 +6,8 @@
 import uuid
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from models.api import ChatRequest, ChatResponse
+from fastapi.responses import StreamingResponse
+from models.api import ChatRequest
 from agent.base_agent import agent
 from db.session_store import session_store
 from config.logging import setup_logging
@@ -29,10 +30,10 @@ app.add_middleware(
 )
 
 
-@app.post("/api/chat", response_model=ChatResponse)
-def chat_endpoint(request: ChatRequest):
+@app.post("/api/chat")
+async def chat_endpoint(request: ChatRequest):
     """
-    接收用户消息并返回 Agent 回答。
+    接收用户消息并开始 SSE 流式返回 Agent 回答。
     支持多轮对话：首次不传 session_id（新建会话），追问时带上 session_id。
     """
     if not request.message:
@@ -48,17 +49,41 @@ def chat_endpoint(request: ChatRequest):
         if history:
             logger.info(f"加载会话历史 [{session_id}]，共 {len(history)} 条消息")
 
-    try:
-        # 调用 Agent（带历史）
-        response_text, messages = agent.run(request.message, history=history)
+    async def stream_generator():
+        # 首先发送 session_id，让前端知道是在哪个会话上下文中
+        yield f"data: {{\"event\": \"session\", \"data\": \"{session_id}\"}}\n\n"
+        
+        # 异步迭代代理运行
+        messages = None
+        try:
+            async for chunk_str in agent.stream_run(request.message, history=history):
+                try:
+                    import json
+                    chunk_data = json.loads(chunk_str)
+                    if chunk_data.get("event") == "final_messages":
+                        messages = chunk_data.get("data")
+                        continue
+                except:
+                    pass
+                yield f"data: {chunk_str}\n\n"
+        except StopAsyncIteration:
+            pass
+        except Exception as e:
+            logger.error(f"流式分发过程中发生错误: {e}")
+            yield f"data: {{\"event\": \"error\", \"data\": \"系统内部错误\"}}\n\n"
 
-        # 保存压缩后的会话历史到 Redis
-        session_store.save_history(session_id, messages)
+        # 流处理完成后，持久化完整的上下文到 Redis
+        if messages:
+            try:
+                session_store.save_history(session_id, messages)
+                logger.info("对话历史已保存到 Redis")
+            except Exception as e:
+                logger.error(f"保存 Redis 历史失败: {e}")
+                
+        # 结束占位事件
+        yield f"data: {{\"event\": \"done\"}}\n\n"
 
-        return ChatResponse(response=response_text, session_id=session_id)
-    except Exception as e:
-        logger.error(f"处理请求失败: {e}")
-        raise HTTPException(status_code=500, detail="服务暂时不可用，请稍后重试。")
+    return StreamingResponse(stream_generator(), media_type="text/event-stream")
 
 
 @app.get("/health")

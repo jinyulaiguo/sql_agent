@@ -15,8 +15,8 @@
         "thought": "这是一个聚合查询。需要关联 Customer 和 Invoice 表，对每个用户的 Invoice Total 求和，然后降序排列取前3。"
     },
     {
-        "question": "查询包含 'Rock' 且时长超过 5 分钟的歌曲",
-        "sql": "SELECT t.Name, t.Milliseconds, g.Name AS GenreName FROM Track t JOIN Genre g ON t.GenreId = g.GenreId WHERE g.Name = 'Rock' AND t.Milliseconds > 300000 LIMIT 20",
-        "thought": "这是一个带条件的关联查询。需要关联 Track 和 Genre，并在 WHERE 子句中同时过滤流派名称和歌曲时长（注意单位是毫秒）。"
+        "question": "查询数据量最多的 5 张表",
+        "sql": "SELECT TABLE_NAME, TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_SCHEMA = (SELECT DATABASE()) ORDER BY TABLE_ROWS DESC LIMIT 5",
+        "thought": "这是一个元数据统计问题。与其盲目调用 RAG 工具，不如直接查询 information_schema.TABLES 获取真实的表行数记录，这样最准确且高效。"
     }
 ]
