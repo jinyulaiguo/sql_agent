@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     session_ttl: int = 1800  # 会话过期时间（秒），默认 30 分钟
     max_history_rounds: int = 5  # 最大保留对话轮数
+    
+    # Auth & JWT Configuration
+    secret_key: str = "60e9095699478f79f6f69f8999a0956d9876543210abcdef" # 建议从环境变量读取
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24 * 30  # 默认 30 天
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

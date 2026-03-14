@@ -2,6 +2,8 @@
 import { ref, nextTick } from 'vue'
 import ChatMessage from './ChatMessage.vue'
 
+const emit = defineEmits(['message-sent'])
+
 const messages = ref([
   { role: 'agent', content: '你好！我是你的 SQL 智能助手。你可以问我关于音乐数据库的任何问题，比如"统计每种流派的歌曲数量"。' }
 ])
@@ -23,6 +25,54 @@ const startNewChat = () => {
     { role: 'agent', content: '你好！新的对话已开始。请问有什么问题？' }
   ]
 }
+
+const loadSession = async (sid) => {
+  sessionId.value = sid
+  isLoading.value = true
+  const token = localStorage.getItem('token')
+  try {
+    const response = await fetch(`http://localhost:8000/api/v1/sessions/${sid}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (response.ok) {
+      const data = await response.json()
+      // 合并历史消息：将连续的非用户消息合并为一个 agent 气泡
+      const mergedMessages = []
+      let lastAgentMsg = null
+
+      data.messages.forEach(m => {
+        if (m.role === 'system') return
+        
+        if (m.role === 'user') {
+          mergedMessages.push({ role: 'user', content: m.content })
+          lastAgentMsg = null
+        } else {
+          // assistant, tool 等中间角色统一映射为 agent
+          let content = m.content || ''
+          // 如果是工具输出，包裹在 thought 标签中以便折叠
+          if (m.role === 'tool') {
+             content = `\n<thought>🔧 工具执行结果: ${content}</thought>\n`
+          }
+          
+          if (lastAgentMsg) {
+            lastAgentMsg.content += content
+          } else {
+            lastAgentMsg = { role: 'agent', content: content }
+            mergedMessages.push(lastAgentMsg)
+          }
+        }
+      })
+      messages.value = mergedMessages
+      scrollToBottom()
+    }
+  } catch (err) {
+    console.error('Failed to load session:', err)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+defineExpose({ startNewChat, loadSession })
 
 const sendMessage = async () => {
   const content = inputMessage.value.trim()
@@ -46,7 +96,10 @@ const sendMessage = async () => {
 
     const response = await fetch('http://localhost:8000/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
       body: JSON.stringify(requestBody)
     })
 
@@ -114,21 +167,13 @@ const sendMessage = async () => {
   } finally {
     isLoading.value = false
     scrollToBottom()
+    emit('message-sent') // 通知父组件刷新侧边栏列表
   }
 }
 </script>
 
 <template>
   <div class="chat-interface">
-    <div class="chat-header">
-      <button class="new-chat-btn" @click="startNewChat" title="新对话">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-        新对话
-      </button>
-    </div>
 
     <div class="chat-history" ref="chatContainer">
       <ChatMessage 
@@ -169,30 +214,6 @@ const sendMessage = async () => {
   width: 100%;
 }
 
-.chat-header {
-  padding: 12px 20px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.new-chat-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: 1px solid #dadce0;
-  border-radius: 20px;
-  background: white;
-  color: var(--accent-color);
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: background 0.2s, box-shadow 0.2s;
-}
-
-.new-chat-btn:hover {
-  background: #f0f4f9;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
 
 .chat-history {
   flex: 1;

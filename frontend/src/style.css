@@ -15,16 +15,11 @@ body {
   margin: 0;
   padding: 0;
   height: 100vh;
-  display: flex;
-  justify-content: center;
 }
 
 #app {
   width: 100%;
-  max-width: 900px;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
+  height: 100%;
 }
 
 /* Scrollbar */

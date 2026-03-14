@@ -25,6 +25,9 @@ dependencies = [
     "rank-bm25>=0.2.2",
     "jieba>=0.42.1",
     "asgiref>=3.11.1",
+    "passlib>=1.7.4",
+    "python-jose[cryptography]>=3.5.0",
+    "bcrypt>=5.0.0",
 ]
 requires-python = ">=3.10"
 readme = "README.md"

@@ -214,6 +214,16 @@ tests/
 | **方案A（推荐）** | 将中文描述写入 MySQL 的 `COMMENT` 字段（`ALTER TABLE ... COMMENT`），`schema_extractor` 已支持优先读取数据库注释，无需额外文件 |
 | **方案B** | 新建脚本通过 LLM 自动根据字段名生成中文描述，写入 MySQL 注释或 JSON 文件 |
 
+### 3.15 🔴 RAG 数据隔离与安全防护
+
+| 项目 | 说明 |
+|------|------|
+| **问题** | 当前 RAG 索引无差别提取所有表（包含 `users`, `chat_sessions` 等），LLM 可能通过生成的 SQL 访问敏感用户信息 |
+| **风险** | 1. **隐私泄露**：`users` 表包含 `password_hash`，若被 Agent 查询可能导致严重安全事故；2. **检索噪音**：系统表会干扰业务数据的语义召回 |
+| **方案A** | **物理隔离/双库架构**：将 `users` 等管理表放在 `auth_db`，业务表放在 `business_db`，RAG 提取器仅连接业务库 |
+| **方案B（推荐）** | **MySQL 权限最小化**：为 Agent 创建专属只读用户，仅 `GRANT` 业务表的 `SELECT` 权限。`SchemaExtractor` 自动因权限限制而无法“看到”系统表 |
+| **方案C** | **SQL 审计 (Guardrails)**：在执行前解析 SQL AST，发现包含 `users` 等敏感表名时强制拦截 |
+
 ---
 
 ## 四、修改优先级排序（建议执行顺序）
@@ -229,6 +239,7 @@ tests/
 | 5 | 修复 XSS 风险（v-html + DOMPurify） | `ChatMessage.vue` | ⭐ |
 | 6 | 移除硬编码密码 | `settings.py` | ⭐ |
 | 7 | 统一错误处理，不泄漏内部信息 | `base_agent.py`, `api_server.py` | ⭐⭐ |
+| 8 | **RAG 安全防护：MySQL 权限控制** | 数据库侧配置 + `settings.py` | ⭐ |
 
 ### 第二批（P1 强烈建议 —— 可用性与健壮性）
 
