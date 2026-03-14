@@ -181,8 +181,9 @@ uv run main.py
 
 - **混合检索 (Hybrid RAG)**：结合 ChromaDB 语义向量 (`bge-base-zh-v1.5`) 与 BM25 关键词检索，双路召回并使用 RRF 算法融合，大幅提升中文场景与业务命名精确匹配的准确率
 - **多轮对话支持**：基于 Redis 会话存储管理和上下文截断压缩策略，实现长效的多轮追问及意图继承能力
+- **全链路异步流式响应 (SSE)**：后端基于 `AsyncOpenAI` 和 FastAPI 实现 SSE 流式推送，响应更及时，提升用户体验
 - **安全并发引擎**：重构组件连接池与 Agent 局域状态隔离，杜绝并发污染；后端使用 sqlglot 将 SQL 解析为 AST 拦截写操作，前端引入 DOMPurify 洗消防御 XSS 攻击
-- **Gemini UI 与折叠思考流**：仿 Google Astro/Gemini 界面设计，支持 Markdown 渲染。具备提取 `<plan>` 等思考过程并将其折叠的功能，界面清爽
+- **Gemini UI 与折叠思考流**：仿 Google Astro/Gemini 界面设计，支持 Markdown 渲染。具备动态提取 `<plan>`、`<thought>` 等思考过程并将其在前端折叠的功能，界面清爽
 - **Few-shot 学习**：内置典型查询示例，提升复杂 SQL（多表 JOIN、聚合等）的生成准确率
 - **中文注释增强**：对 Chinook 数据集提供完整的中文字段描述映射，帮助 LLM 理解数据含义
 
@@ -194,7 +195,7 @@ uv run main.py
 
 整个系统的工作流是一个智能调度的循环过程（Agent Loop）：
 
-1. **意图接收**：FastAPI 后端接收用户自然语言查询，调用 ReAct Agent 实例
+1. **意图接收**：FastAPI 后端接收用户自然语言查询，调用 ReAct Agent 的 `stream_run` 异步方法
 2. **Schema 召回 (RAG)**：Agent 调用 `list_tables_tool`，系统利用 ChromaDB 通过语义向量相似度匹配，召回与当前问题最相关的 Top-5 张表
 3. **结构解析**：Agent 调用 `get_schema_tool`，系统实时从 MySQL 中提取这几张表完整的 DDL 语句及字段注释
 4. **SQL 生成与审阅**：LLM 基于表结构上下文生成 SQL，生成的 SQL 被 sqlglot 解析为 AST，实施安全准入检查（拦截 `DROP`、`UPDATE`、`DELETE` 等非读操作）
@@ -211,7 +212,6 @@ uv run main.py
 
 本项目存在以下局限性或待优化点：
 
-- **不支持流式输出**：需等待 Agent 完整执行完毕后才返回结果，未来可考虑基于 SSE 构建流式推送
 - **大规模表极光召回局限**：在超大规模表场景 (>500张) 下，可能需要引入基于业务域过滤的更细颗粒度（字段级）检索
 
 > 详细的优化方案和重构建议见 [优化修改清单](docs/optimization_list.md)

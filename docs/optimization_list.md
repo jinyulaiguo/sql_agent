@@ -23,7 +23,7 @@
 | **文件** | [api_server.py](file:///Users/zhouyi/01.python-program/ai-project/10.practiseLike09/day10/api_server.py) |
 | **方案A** | 改为 `def chat_endpoint`（非 async），FastAPI 会自动放入线程池执行 |
 | **方案B** | 保持 async，用 `await asyncio.to_thread(agent.run, request.message)` |
-| **方案C**（终极） | 全链路异步化：`agent.run` 改 async，数据库用 `aiomysql`/`asyncmy`，LLM 调用用 `AsyncOpenAI` |
+| **方案C**（终极） | **已实现**：全链路异步化：`agent.run` 改 async，数据库用 `aiomysql`/`asyncmy`，LLM 调用用 `AsyncOpenAI` |
 
 ### 1.3 🟡 数据库连接管理 —— Engine 碎片化 ✅ 已修复
 
@@ -44,7 +44,7 @@
 
 | 项目 | 说明 |
 |------|------|
-| **内容** | `agent.run()` → async、OpenAI SDK → `AsyncOpenAI`、SQLAlchemy → `create_async_engine` + `asyncmy`、API 响应 → SSE 流式推送 |
+| **内容** | **已实现**：`agent.run()` → async、OpenAI SDK → `AsyncOpenAI`、SQLAlchemy → `create_async_engine` + `asyncmy`、API 响应 → SSE 流式推送 |
 | **收益** | 10 倍以上吞吐量提升，前端可实时看到 Agent 思考过程 |
 
 ---
@@ -94,7 +94,7 @@
 
 | 项目 | 说明 |
 |------|------|
-| **内容** | 前端实时展示 Agent 每一步操作（正在检索表...→正在获取Schema...→正在生成SQL...→正在执行...）|
+| **内容** | **已实现**：前端实时展示 Agent 每一步操作（正在检索表...→正在获取Schema...→正在生成SQL...→正在执行...）|
 | **方案** | 后端 SSE 推送中间状态，前端用步骤条或思维链卡片渲染 |
 
 ---
