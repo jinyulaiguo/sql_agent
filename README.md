@@ -21,7 +21,8 @@ day10/
 │   ├── indexer.py              # Schema 构建向量索引与 BM25 词库
 │   └── retriever.py            # BM25 + Vector 混合相似度检索及 RRF 融合
 ├── security/                   # 安全层
-│   └── sql_validator.py        # SQL AST 安全校验 (sqlglot)
+│   ├── sql_validator.py        # SQL AST 安全校验 (sqlglot)
+│   └── auth.py                 # JWT 鉴权与密码哈希处理
 ├── models/                     # 数据模型层
 │   ├── schemas.py              # 数据库 Schema 模型 (TableSchema, ColumnSchema)
 │   └── api.py                  # API 请求/响应模型 (ChatRequest, ChatResponse)
@@ -39,7 +40,8 @@ day10/
 │       ├── style.css           # Gemini 风格样式
 │       └── App.vue             # 主应用入口
 ├── scripts/                    # 工具脚本
-│   ├── setup_database.py       # 数据库初始化 (导入 Chinook)
+│   ├── setup_database.py       # 业务数据库初始化 (导入 Chinook)
+│   ├── init_auth_db.py         # 用户认证数据库初始化 (users/sessions 表)
 │   ├── build_rag_index.py      # RAG 索引构建
 │   └── test_*.py               # 各模块手动测试脚本
 ├── docs/                       # 文档
@@ -71,11 +73,11 @@ api_server.py / main.py       ← 入口层
 
 在运行本项目之前，请确保您的环境中安装了以下软件：
 
-1. **Python 3.10+**（推荐使用 [uv](https://docs.astral.sh/uv/) 管理依赖）
-2. **Node.js 18+**（用于前端）
-3. **MySQL 8.0 / MariaDB**（数据库服务，需已启动）
-4. **Redis**（用于多轮对话上下文缓存，建议开启）
-5. **DeepSeek API Key**（或其他兼容 OpenAI SDK 的 LLM）
+1.  **Python 3.10+**（推荐使用 [uv](https://docs.astral.sh/uv/) 管理依赖）
+2.  **Node.js 18+**（用于前端）
+3.  **MySQL 8.0 / MariaDB**（数据库服务，需已启动）
+4.  **Redis**（用于多轮对话上下文缓存，建议开启）
+5.  **DeepSeek API Key**（或其他兼容 OpenAI SDK 的 LLM）
 
 ## 🚀 快速启动
 
@@ -118,10 +120,13 @@ cd frontend && npm install && cd ..
 # 1. 创建数据库（如尚未创建）
 mysql -u your_user -p -e "CREATE DATABASE IF NOT EXISTS sql_rag_db CHARACTER SET utf8mb4;"
 
-# 2. 初始化数据库 (导入 Chinook 数据集)
+# 2. 初始化业务数据库 (导入 Chinook 数据集)
 uv run scripts/setup_database.py
 
-# 3. 构建 RAG 向量索引
+# 3. 初始化用户认证数据库
+uv run scripts/init_auth_db.py
+
+# 4. 构建 RAG 向量索引
 uv run scripts/build_rag_index.py
 ```
 
@@ -179,13 +184,15 @@ uv run main.py
 
 ## ✨ 功能特性
 
-- **混合检索 (Hybrid RAG)**：结合 ChromaDB 语义向量 (`bge-base-zh-v1.5`) 与 BM25 关键词检索，双路召回并使用 RRF 算法融合，大幅提升中文场景与业务命名精确匹配的准确率
-- **多轮对话支持**：基于 Redis 会话存储管理和上下文截断压缩策略，实现长效的多轮追问及意图继承能力
-- **全链路异步流式响应 (SSE)**：后端基于 `AsyncOpenAI` 和 FastAPI 实现 SSE 流式推送，响应更及时，提升用户体验
-- **安全并发引擎**：重构组件连接池与 Agent 局域状态隔离，杜绝并发污染；后端使用 sqlglot 将 SQL 解析为 AST 拦截写操作，前端引入 DOMPurify 洗消防御 XSS 攻击
-- **Gemini UI 与折叠思考流**：仿 Google Astro/Gemini 界面设计，支持 Markdown 渲染。具备动态提取 `<plan>`、`<thought>` 等思考过程并将其在前端折叠的功能，界面清爽
-- **Few-shot 学习**：内置典型查询示例，提升复杂 SQL（多表 JOIN、聚合等）的生成准确率
-- **中文注释增强**：对 Chinook 数据集提供完整的中文字段描述映射，帮助 LLM 理解数据含义
+-   **用户系统与认证**：基于 JWT 实现用户注册、登录，确保数据隔离与安全。
+-   **会话历史管理**：用户登录后可查看并恢复历史对话，支持多会话并行。
+-   **混合检索 (Hybrid RAG)**：结合 ChromaDB 语义向量 (`bge-base-zh-v1.5`) 与 BM25 关键词检索，双路召回并使用 RRF 算法融合，大幅提升中文场景与业务命名精确匹配的准确率
+-   **多轮对话支持**：基于 Redis 会话存储管理和上下文截断压缩策略，实现长效的多轮追问及意图继承能力
+-   **全链路异步流式响应 (SSE)**：后端基于 `AsyncOpenAI` 和 FastAPI 实现 SSE 流式推送，响应更及时，提升用户体验
+-   **安全并发引擎**：重构组件连接池与 Agent 局域状态隔离，杜绝并发污染；后端使用 sqlglot 将 SQL 解析为 AST 拦截写操作，前端引入 DOMPurify 洗消防御 XSS 攻击
+-   **Gemini UI 与折叠思考流**：仿 Google Astro/Gemini 界面设计，支持 Markdown 渲染。具备动态提取 `<plan>`、`<thought>` 等思考过程并将其在前端折叠的功能，界面清爽
+-   **Few-shot 学习**：内置典型查询示例，提升复杂 SQL（多表 JOIN、聚合等）的生成准确率
+-   **中文注释增强**：对 Chinook 数据集提供完整的中文字段描述映射，帮助 LLM 理解数据含义
 
 ## 🏗️ 架构设计与处理流程
 
@@ -195,24 +202,28 @@ uv run main.py
 
 整个系统的工作流是一个智能调度的循环过程（Agent Loop）：
 
-1. **意图接收**：FastAPI 后端接收用户自然语言查询，调用 ReAct Agent 的 `stream_run` 异步方法
-2. **Schema 召回 (RAG)**：Agent 调用 `list_tables_tool`，系统利用 ChromaDB 通过语义向量相似度匹配，召回与当前问题最相关的 Top-5 张表
-3. **结构解析**：Agent 调用 `get_schema_tool`，系统实时从 MySQL 中提取这几张表完整的 DDL 语句及字段注释
-4. **SQL 生成与审阅**：LLM 基于表结构上下文生成 SQL，生成的 SQL 被 sqlglot 解析为 AST，实施安全准入检查（拦截 `DROP`、`UPDATE`、`DELETE` 等非读操作）
-5. **数据获取与总结**：通过校验的 `SELECT` 语句在 MySQL 中执行，结果集（限 20 行）转化为 Markdown 表格，交还给 LLM 进行自然语言总结
+1.  **意图接收**：FastAPI 后端接收用户自然语言查询，调用 ReAct Agent 的 `stream_run` 异步方法
+2.  **Schema 召回 (RAG)**：Agent 调用 `list_tables_tool`，系统利用 ChromaDB 通过语义向量相似度匹配，召回与当前问题最相关的 Top-5 张表
+3.  **结构解析**：Agent 调用 `get_schema_tool`，系统实时从 MySQL 中提取这几张表完整的 DDL 语句及字段注释
+4.  **SQL 生成与审阅**：LLM 基于表结构上下文生成 SQL，生成的 SQL 被 sqlglot 解析为 AST，实施安全准入检查（拦截 `DROP`、`UPDATE`、`DELETE` 等非读操作）
+5.  **数据获取与总结**：通过校验的 `SELECT` 语句在 MySQL 中执行，结果集（限 20 行）转化为 Markdown 表格，交还给 LLM 进行自然语言总结
 
-### API 接口
+### API 接口 (v1)
 
-| 方法 | 路径 | 说明 | 请求体 | 响应体 |
-|------|------|------|--------|--------|
-| POST | `/api/chat` | 发送问题并获取回答 | `{"message": "你的问题"}` | `{"response": "Agent 的回答"}` |
-| GET | `/health` | 健康检查 | - | `{"status": "ok"}` |
+| 方法 | 路径 | 说明 | 请求体内容 |
+|------|------|------|------------|
+| POST | `/api/v1/auth/register` | 用户注册 | `username`, `password` |
+| POST | `/api/v1/auth/login` | 用户登录 | `username`, `password` |
+| GET | `/api/v1/sessions` | 获取当前用户会话列表 | - |
+| GET | `/api/v1/sessions/{id}` | 获取特定会话详情 | - |
+| POST | `/api/chat` | 发送问题（流式 SSE） | `message`, `session_id` |
+| GET | `/health` | 健康检查 | - |
 
 ## ⚠️ 已知限制
 
 本项目存在以下局限性或待优化点：
 
-- **大规模表极光召回局限**：在超大规模表场景 (>500张) 下，可能需要引入基于业务域过滤的更细颗粒度（字段级）检索
+-   **大规模表极光召回局限**：在超大规模表场景 (>500张) 下，可能需要引入基于业务域过滤的更细颗粒度（字段级）检索
 
 > 详细的优化方案和重构建议见 [优化修改清单](docs/optimization_list.md)
 
