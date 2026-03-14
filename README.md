@@ -189,7 +189,7 @@ uv run main.py
 -   **混合检索 (Hybrid RAG)**：结合 ChromaDB 语义向量 (`bge-base-zh-v1.5`) 与 BM25 关键词检索，双路召回并使用 RRF 算法融合，大幅提升中文场景与业务命名精确匹配的准确率
 -   **多轮对话支持**：基于 Redis 会话存储管理和上下文截断压缩策略，实现长效的多轮追问及意图继承能力
 -   **全链路异步流式响应 (SSE)**：后端基于 `AsyncOpenAI` 和 FastAPI 实现 SSE 流式推送，响应更及时，提升用户体验
--   **安全并发引擎**：重构组件连接池与 Agent 局域状态隔离，杜绝并发污染；后端使用 sqlglot 将 SQL 解析为 AST 拦截写操作，前端引入 DOMPurify 洗消防御 XSS 攻击
+-   **全链路安全防护**：重构组件连接池与 Agent 局域状态隔离，杜绝并发污染；后端使用 `sqlglot` 将 SQL 解析为 AST 拦截写操作；前端引入 `DOMPurify` 洗消防御 XSS 攻击，确保渲染安全
 -   **Gemini UI 与折叠思考流**：仿 Google Astro/Gemini 界面设计，支持 Markdown 渲染。具备动态提取 `<plan>`、`<thought>` 等思考过程并将其在前端折叠的功能，界面清爽
 -   **Few-shot 学习**：内置典型查询示例，提升复杂 SQL（多表 JOIN、聚合等）的生成准确率
 -   **中文注释增强**：对 Chinook 数据集提供完整的中文字段描述映射，帮助 LLM 理解数据含义
@@ -207,6 +207,7 @@ uv run main.py
 3.  **结构解析**：Agent 调用 `get_schema_tool`，系统实时从 MySQL 中提取这几张表完整的 DDL 语句及字段注释
 4.  **SQL 生成与审阅**：LLM 基于表结构上下文生成 SQL，生成的 SQL 被 sqlglot 解析为 AST，实施安全准入检查（拦截 `DROP`、`UPDATE`、`DELETE` 等非读操作）
 5.  **数据获取与总结**：通过校验的 `SELECT` 语句在 MySQL 中执行，结果集（限 20 行）转化为 Markdown 表格，交还给 LLM 进行自然语言总结
+6.  **双层持久化存储**：实时通话消息首先由 `session_store.py` 写入 Redis 以保证极速响应；当 SSE 数据流结束时，系统会自动将完整的对话上下文同步至 MySQL 数据库，实现长效持久化和多终端同步
 
 ### API 接口 (v1)
 

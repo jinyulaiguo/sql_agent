@@ -11,9 +11,8 @@
 
 | 项目 | 说明 |
 |------|------|
-| **问题** | `base_agent.py:208` 模块级 `agent = TextToSQLAgent()` 全局单例，`run()` 内 `self.messages = []` 清空历史。多用户并发时 messages 互相覆盖，产生**正确性 bug** |
-| **文件** | [base_agent.py](file:///Users/zhouyi/01.python-program/ai-project/10.practiseLike09/day10/agent/base_agent.py) |
-| **方案** | 将 `messages` 从实例属性改为 `run()` 方法的局部变量；或者每次请求新建 Agent 实例（将 OpenAI client 等重量级对象做类级共享） |
+| **问题** | 曾经 `base_agent.py` 使用全局消息列表，导致多用户并发干扰。 |
+| **现状** | **已修复**：`messages` 已改为 `stream_run()` 方法的局部变量，确保了请求间的状态隔离。 |
 
 ### 1.2 🔴 事件循环阻塞 —— async 函数中调用同步代码 ✅ 已修复
 
@@ -40,11 +39,11 @@
 | **副作用** | 单元测试无法 mock；任何 import 链都会触发 DB/ChromaDB 连接；模块间循环依赖风险 |
 | **方案** | 改用工厂函数 + `@lru_cache`，或引入 FastAPI 的 `Depends()` 依赖注入 |
 
-### 1.5 🔵 全链路异步化（长期目标）
+### 1.5 🔵 全链路异步化（长期目标） ✅ 已实现
 
 | 项目 | 说明 |
 |------|------|
-| **内容** | **已实现**：`agent.run()` → async、OpenAI SDK → `AsyncOpenAI`、SQLAlchemy → `create_async_engine` + `asyncmy`、API 响应 → SSE 流式推送 |
+| **内容** | **已实现**：`agent.stream_run()` 为异步生成器、使用 `AsyncOpenAI`、后端 API 采用 SSE 流式推送。 |
 | **收益** | 10 倍以上吞吐量提升，前端可实时看到 Agent 思考过程 |
 
 ---
@@ -55,18 +54,15 @@
 
 | 项目 | 说明 |
 |------|------|
-| **问题** | `run()` 每次调用 `self.messages = []` 清空历史，用户无法追问「上一个结果里哪个最高」 |
+| **现状** | **已实现**：引入了基于 Redis 的 `session_store.py` 和基于 MySQL 的持久化，支持上下文追问与历史回顾。 |
 | **方案** | 引入 `session_id` 概念，服务端维护会话历史（内存/Redis），支持上下文连续对话，同时设置历史截断策略防止 Token 爆涨 |
 
 ### 2.2 🟡 RAG 检索质量提升 ✅ 已修复
+
 | 项目 | 说明 |
 |------|------|
-| **问题1** | Embedding 模型 `all-MiniLM-L6-v2` 主要支持英文，中文语义匹配差 |
-| **方案** | 切换 `paraphrase-multilingual-MiniLM-L12-v2` 或 `bge-base-zh-v1.5` |
-| **问题2** | 业务术语（如"销售冠军"）无法召回 `Employee` 表 |
-| **方案** | 在索引文档中增加业务场景描述，扩充同义词 |
-| **问题3** | 检索结果无二次排序，单纯依靠向量检索召回率受限 |
-| **方案** | **已实现**：引入 BM25 + Vector 混合检索，并使用 RRF (Reciprocal Rank Fusion) 算法融合结果。 |
+| **现状** | **已实现**：已切换为 `bge-base-zh-v1.5` 中文向量模型，并引入了 BM25 + Vector 的双路召回与 RRF 融合。 |
+| **方案** | 引入 BM25 + Vector 混合检索，并使用 RRF (Reciprocal Rank Fusion) 算法融合结果。 |
 
 ### 2.3 🟡 SQL 执行结果截断策略
 
@@ -90,11 +86,11 @@
 | **内容** | 对相同/相似问题的 SQL 结果做缓存（Redis / 内存 LRU），避免重复调用 LLM 和 DB |
 | **收益** | 大幅降低延迟和 API 调用费用 |
 
-### 2.6 🔵 Agent 思考过程透明化
+### 2.6 🔵 Agent 思考过程透明化 ✅ 已实现
 
 | 项目 | 说明 |
 |------|------|
-| **内容** | **已实现**：前端实时展示 Agent 每一步操作（正在检索表...→正在获取Schema...→正在生成SQL...→正在执行...）|
+| **内容** | **已实现**：后端通过 SSE 分阶段推送 `tool` 和 `content` 事件，前端通过 `ChatMessage.vue` 的 `<thought>` 标签解析实现动态折叠展示。 |
 | **方案** | 后端 SSE 推送中间状态，前端用步骤条或思维链卡片渲染 |
 
 ---
@@ -116,34 +112,33 @@
 | **问题** | `base_agent.py:164-171` 三个 if-elif 分支做的事完全一样（都是 `func(**arguments)`） |
 | **方案** | 替换为一行：`result = func(**arguments)` |
 
-### 3.3 🔴 XSS 安全风险
+### 3.3 🔴 XSS 安全风险 —— v-html 渲染未经洗消的内容 ✅ 已修复
 
 | 项目 | 说明 |
 |------|------|
-| **问题** | `ChatMessage.vue:31` 使用 `v-html="parsedContent"` 直接渲染 `marked.parse()` 输出，无 sanitize |
-| **风险** | LLM 返回的内容若包含 `<script>` 或恶意事件属性，会被直接执行 |
-| **方案** | 安装 `dompurify`，渲染前执行 `DOMPurify.sanitize(marked.parse(content))` |
+| **问题** | `ChatMessage.vue:73` 使用 `v-html` 渲染 Markdown 解析后的内容 |
+| **方案** | **已实现**：引入 `DOMPurify` 库对 Markdown 解析后的 HTML 进行洗消 (Sanitize) 后再渲染 |
+| **效果** | 有效防御通过 LLM 注入的恶意脚本，增强前端安全性 |
 
 ### 3.4 🟡 敏感信息泄漏 ✅ 已修复
 
 | 项目 | 说明 |
 |------|------|
-| **问题1** | `settings.py:15` 硬编码了 `mysql_password: str = "ragAgent2026"` |
-| **问题2** | `base_agent.py:204` 直接 `return f"Agent met an error: {e}"`，可能暴露 DB 连接串、API Key |
+| **现状** | **已修复**：API 层异常处理已统一化，不向前端暴露详细 Traceback；DB 错误信息已脱敏处理。 |
 | **方案** | 移除默认密码，`.env` 未配置时直接报错终止；API 层返回统一错误消息（如 `"服务暂时不可用"`），详细错误只写日志 |
 
 ### 3.5 🟡 前端 API 地址硬编码
 
 | 项目 | 说明 |
 |------|------|
-| **问题** | `ChatInterface.vue:30` 写死 `http://localhost:8000/api/chat` |
-| **方案** | 使用 Vite 环境变量 `import.meta.env.VITE_API_BASE_URL`，或在 `vite.config.js` 配置 proxy |
+| **问题** | `ChatInterface.vue` 中写死 `http://localhost:8000/api/chat` 等地址 |
+| **方案** | 使用 Vite 环境变量 `import.meta.env.VITE_API_BASE_URL`，并在 `vite.config.js` 中通过 `proxy` 实现跨域代理 |
 
 ### 3.6 🟡 日志规范化 ✅ 已修复
 
 | 项目 | 说明 |
 |------|------|
-| **问题** | 使用 `loguru.logger` 但无统一配置（日志级别、格式、rotation、输出位置等）|
+| **现状** | **已完成**：建立了独立的 `config/logging.py`，配置了 Loguru 的日志格式、级别及异步写入。 |
 | **方案** | 新建 `config/logging.py`，统一配置 loguru：生产环境输出 JSON 格式到文件 + rotation，开发环境彩色终端输出 |
 
 ### 3.7 🟡 自动化测试
@@ -165,25 +160,25 @@ tests/
 └── test_api.py               # API 接口：正常请求、空消息、超时
 ```
 
-### 3.8 🟡 配置管理优化 ✅ 已修复
+### 3.8 🟡 配置管理优化 —— 模型名称硬编码 ✅ 已修复
 
 | 项目 | 说明 |
 |------|------|
-| **问题** | `model` 硬编码为 `"deepseek-chat"`（`base_agent.py:16`），`Settings` 中的 `model_name` 没被使用 |
-| **方案** | Agent 中改用 `self.settings.model_name`；增加 `max_turns`、`fetch_limit` 等可配参数 |
+| **问题** | `base_agent.py` 中 `self.model` 曾硬编码为 `"deepseek-chat"` |
+| **方案** | **已实现**：Agent 构造函数中统一使用 `settings.model_name` (来自 `.env` 配置文件) |
+| **效果** | 提供更好的模型灵活性，无需修改代码即可切换大模型 |
 
 ### 3.9 🟡 前端遗留文件清理 ✅ 已修复
 
 | 项目 | 说明 |
 |------|------|
-| **问题** | `frontend/src/components/HelloWorld.vue` 是 Vite 脚手架默认组件，未使用 |
-| **方案** | 删除 |
+| **现状** | **已完成**：无效的 `HelloWorld.vue` 组件已被移除。 |
 
-### 3.10 🔵 类型标注完善 ✅ 已修复
+### 3.10 🔵 类型标注完善 ✅ 已实现
 
 | 项目 | 说明 |
 |------|------|
-| **问题** | `base_agent.py` 的 `run()` 返回 `str` 但没有类型标注；`tool_map` 没有类型声明 |
+| **状态** | **已实现**：核心模块 `base_agent.py`、`api_server.py` 及 `models/` 均已补充类型标注。 |
 | **方案** | 补充 `-> str` 返回类型、`Dict[str, Callable]` 类型标注 |
 
 ### 3.11 🔵 API 接口增强
@@ -206,23 +201,26 @@ tests/
 | **问题** | 部署时需要手动分步执行 `setup_database.py` → `build_rag_index.py` → 启动服务，步骤分散易遗漏 |
 | **方案** | 新建 `scripts/init_all.py` 或 `Makefile`，一键完成建库 + 导数据 + 构建 RAG 索引 + 启动服务 |
 
-### 3.14 🟡 中文注释动态化（消除 `chinook_zh.py` 硬编码）
+### 3.14 🟡 中文注释动态化（消除 `chinook_zh.py` 硬编码） ✅ 已实现
 
 | 项目 | 说明 |
 |------|------|
-| **问题** | `data/chinook_zh.py` 是手动维护的静态映射，表结构变更后需要同步更新，不够动态 |
-| **方案A（推荐）** | 将中文描述写入 MySQL 的 `COMMENT` 字段（`ALTER TABLE ... COMMENT`），`schema_extractor` 已支持优先读取数据库注释，无需额外文件 |
-| **方案B** | 新建脚本通过 LLM 自动根据字段名生成中文描述，写入 MySQL 注释或 JSON 文件 |
+| **问题** | `data/chinook_zh.py` 是手动维护的映射，结构变更后维护成本高 |
+| **方案** | **已实现**：`schema_extractor` 已优先读取 MySQL `COMMENT` 字段。建议逐步将生产环境元数据迁入 DB 中。 |
 
-### 3.15 🔴 RAG 数据隔离与安全防护
+### 3.15 🔴 RAG 数据隔离与安全防护 (P0 优先级)
 
 | 项目 | 说明 |
 |------|------|
-| **问题** | 当前 RAG 索引无差别提取所有表（包含 `users`, `chat_sessions` 等），LLM 可能通过生成的 SQL 访问敏感用户信息 |
-| **风险** | 1. **隐私泄露**：`users` 表包含 `password_hash`，若被 Agent 查询可能导致严重安全事故；2. **检索噪音**：系统表会干扰业务数据的语义召回 |
-| **方案A** | **物理隔离/双库架构**：将 `users` 等管理表放在 `auth_db`，业务表放在 `business_db`，RAG 提取器仅连接业务库 |
-| **方案B（推荐）** | **MySQL 权限最小化**：为 Agent 创建专属只读用户，仅 `GRANT` 业务表的 `SELECT` 权限。`SchemaExtractor` 自动因权限限制而无法“看到”系统表 |
-| **方案C** | **SQL 审计 (Guardrails)**：在执行前解析 SQL AST，发现包含 `users` 等敏感表名时强制拦截 |
+| **风险** | 敏感表（如 `users`）可能被 RAG 召回并由 Agent 查询 |
+| **方案** | **强烈推荐方案 B**：为 Agent 创建专属只读用户，在 MySQL 侧通过权限控制（最小特权原则）隐藏管理表 |
+
+### 3.16 🔵 全链路性能监控与分析
+
+| 项目 | 说明 |
+|------|------|
+| **内容** | 增加对 Agent 各步骤耗时、Token 消耗、SQL 执行吞吐量的监控 |
+| **方案** | 扩展 `config/logging.py` 输出结构化指标日志，或集成 Prometheus 指标采集 |
 
 ---
 
@@ -418,7 +416,7 @@ DDL: CREATE TABLE Customer (...)
 
 - [ ] 多粒度索引（表级 + 字段级）
 - [ ] Cross-Encoder Re-ranking
-- [ ] 全链路异步化 + SSE 流式推送
+- [x] 全链路异步化 + SSE 流式推送
 - [ ] 层级检索支持 500+ 表规模
 - [ ] 查询缓存 + 成本监控
 
@@ -428,13 +426,11 @@ DDL: CREATE TABLE Customer (...)
 
 > 第二版本完成多轮对话后，第三版本重点解决用户身份和个性化问题。
 
-### 6.1 🟡 用户系统与持久化历史
+### 6.1 🟡 用户系统与持久化历史 ✅ 已实现
 
 | 项目 | 说明 |
 |------|------|
-| **内容** | 新建 `users`、`sessions`、`messages` 三张表；实现注册/登录 API（JWT 鉴权）；前端增加登录页 + 侧边栏历史会话列表 |
-| **效果** | 用户重新打开服务时可以看到历史聊天记录，支持新建/切换/删除会话 |
-| **存储** | MySQL 持久化 + Redis 缓存当前活跃会话 |
+| **现状** | **已实现**：完成了基于 JWT 的注册/登录方案，并在后端实现了 Redis/MySQL 双层对话持久化及其查询 API。 |
 
 ### 6.2 🔵 用户画像与个性化推荐
 
@@ -459,9 +455,8 @@ DDL: CREATE TABLE Customer (...)
 | **流程适配** | 前端允许用户选择当前对话使用的数据源；Agent 注入 `db_type` 变量到 Prompt 引导方言；`sqlglot` 校验时传入对应的方言 `read=db_type` |
 | **优势** | 核心组件（SQLAlchemy Inspector 提取 Schema，sqlglot 校验跨方言 AST）天生解耦，支持无缝拓展 90% 的关系型数据库 |
 
-### 6.5 🔵 前端思维链展示（动态折叠）
+### 6.5 🔵 前端思维链展示（动态折叠） ✅ 已实现
 
 | 项目 | 说明 |
 |------|------|
-| **内容** | 优化 `ChatMessage.vue` 的渲染逻辑，利用正则表达式从大模型回复内容中抽取出 `<plan>` 和 `<plan_update>` 标签包裹的思维链过程。 |
-| **效果** | 对文本块进行分离渲染：正式回复内容直接渲染为普通的 Markdown 气泡；而 Agent 内部生成的分析计划和纠错思路使用 HTML `<details>` 标签转化为可折叠面板并赋予特定的高亮/灰底样式，达到内敛清爽且便于调试的用户体验。 |
+| **现状** | **已实现**：`ChatMessage.vue` 已支持动态解析 `<thought>`、`<plan>` 等标签并实时提供可折叠的思维展示。 |
