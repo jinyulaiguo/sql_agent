@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     deepseek_api_key: str
     deepseek_base_url: str = "https://api.deepseek.com"
     model_name: str = "deepseek-chat"
+    log_level: str = "INFO"
 
     # MySQL Configuration
     mysql_host: str = "localhost"

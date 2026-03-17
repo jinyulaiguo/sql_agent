@@ -154,6 +154,9 @@ class TextToSQLAgent:
 
         max_turns = 100
         for turn in range(max_turns):
+            logger.info(f"--- [Turn {turn + 1}] ---")
+            logger.debug(f"LLM Input Messages: {json.dumps(messages, ensure_ascii=False, indent=2)}")
+            
             try:
                 response = await self.client.chat.completions.create(
                     model=self.model,
@@ -168,7 +171,12 @@ class TextToSQLAgent:
                 # 用于拼接 Function Calling 参数
                 tool_calls_dict = {}
 
+                has_started_generating = False
                 async for chunk in response:
+                    if not has_started_generating:
+                        logger.info("LLM 开始生成响应...")
+                        has_started_generating = True
+                        
                     delta = chunk.choices[0].delta
                     
                     # 1. 文本输出流
@@ -197,6 +205,7 @@ class TextToSQLAgent:
                 assistant_message = {"role": "assistant"}
                 if current_content:
                     assistant_message["content"] = current_content
+                    logger.info(f"LLM 文本输出: {current_content[:100]}..." if len(current_content) > 100 else f"LLM 文本输出: {current_content}")
                 
                 # 情况1: LLM 决定调用工具
                 if tool_calls_dict:
@@ -214,7 +223,7 @@ class TextToSQLAgent:
                         except json.JSONDecodeError:
                             arguments = {}
                             
-                        logger.info(f"调用工具: {function_name}，参数: {arguments}")
+                        logger.info(f"🔧 准备执行工具: {function_name} | 参数: {arguments}")
                         yield json.dumps({"event": "tool", "data": f"执行动作: {function_name}"}, ensure_ascii=False)
 
                         func = self.tool_map.get(function_name)
@@ -223,10 +232,13 @@ class TextToSQLAgent:
                                 # 对于同步工具函数，使用 run_in_executor 避免阻塞事件循环
                                 loop = asyncio.get_event_loop()
                                 result = await loop.run_in_executor(None, lambda: func(**arguments))
+                                logger.info(f"✅ 工具 {function_name} 执行结果: {str(result)[:200]}..." if len(str(result)) > 200 else f"✅ 工具 {function_name} 执行结果: {result}")
                             except Exception as e:
                                 result = f"工具执行错误: {e}"
+                                logger.error(f"❌ 工具 {function_name} 执行失败: {e}")
                         else:
                             result = "错误: 未知工具。"
+                            logger.error(f"❌ 未知工具: {function_name}")
 
                         messages.append(
                             {
@@ -240,12 +252,12 @@ class TextToSQLAgent:
 
                 # 情况2: 无工具调用，推理结束
                 messages.append(assistant_message)
-                logger.info("Agent 完成推理。")
+                logger.info("✨ Agent 完成推理过程。")
                 yield json.dumps({"event": "final_messages", "data": messages}, ensure_ascii=False)
                 return
 
             except Exception as e:
-                logger.error(f"Agent 流式执行错误: {e}")
+                logger.error(f"Agent 流式执行异常: {e}")
                 yield json.dumps({"event": "error", "data": "抱歉，处理您的问题时发生了内部错误，请稍后重试。"}, ensure_ascii=False)
                 return
 

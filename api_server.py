@@ -23,7 +23,8 @@ from fastapi import FastAPI, HTTPException, Depends, status
 import uvicorn
 
 # 初始化日志
-setup_logging()
+from config.settings import get_settings
+setup_logging(level=get_settings().log_level)
 
 # 初始化 FastAPI
 app = FastAPI(title="Text-to-SQL Agent API", version="2.0.0")

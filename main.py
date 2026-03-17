@@ -11,7 +11,8 @@ from agent.base_agent import agent
 from loguru import logger
 
 # 初始化日志
-setup_logging()
+from config.settings import get_settings
+setup_logging(level=get_settings().log_level)
 
 
 def main():
